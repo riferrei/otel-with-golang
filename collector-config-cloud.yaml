@@ -1,0 +1,26 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:55680
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+extensions:
+  health_check:
+
+exporters:
+  elastic:
+    apm_server_url: "<APM_SERVER_URL>"
+    secret_token: "<SECRET_TOKEN>"
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [elastic]

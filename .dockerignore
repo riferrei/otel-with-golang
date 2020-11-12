@@ -1,0 +1,8 @@
+.git
+.cache
+README.md
+
+collector-config-local.yaml
+collector-config-cloud.yaml
+docker-compose-local.yaml
+docker-compose-cloud.yaml
