@@ -14,19 +14,19 @@ services:
     depends_on:
       - collector
     environment:
-      - COLLECTOR_ADDRESS=collector:55680
+      - ENDPOINT_ADDRESS=collector:55680
     healthcheck:
       interval: 5s
       retries: 10
       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:8888/hello
 
   collector:
-    image: otel/opentelemetry-collector-contrib-dev
+    image: otel/opentelemetry-collector-contrib
     container_name: collector
     hostname: collector
-    command: ["--config=/etc/collector-config-local.yaml"]
+    command: ["--config=/etc/collector-config.yaml"]
     volumes:
-      - ./collector-config-local.yaml:/etc/collector-config-local.yaml
+      - ./collector-config.yaml:/etc/collector-config.yaml
     ports:
       - "13133:13133"
       - "55680:55680"
@@ -37,7 +37,7 @@ services:
         condition: service_healthy
 
   apm-server:
-    image: docker.elastic.co/apm/apm-server:7.10.0
+    image: docker.elastic.co/apm/apm-server:7.12.0
     container_name: apm-server
     hostname: apm-server
     depends_on:
@@ -65,7 +65,7 @@ services:
       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:8200/
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.12.0
     container_name: elasticsearch
     environment:
     - bootstrap.memory_lock=true
@@ -89,7 +89,7 @@ services:
       test: curl -s http://localhost:9200/_cluster/health | grep -vq '"status":"red"'
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:7.10.0
+    image: docker.elastic.co/kibana/kibana:7.12.0
     container_name: kibana
     depends_on:
       elasticsearch:

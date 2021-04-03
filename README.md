@@ -1,31 +1,32 @@
 # OpenTelemetry in Go with Elastic APM
 
-This project showcase how to use [Elastic APM](https://www.elastic.co/apm) with a microservice written in [Go](https://golang.org/) and instrumented using [OpenTelemetry](https://opentelemetry.io/). Everything is based on [Docker Compose](https://docs.docker.com/compose/) and you can test it with Elastic APM running locally or running on [Elasticsearch Service](https://www.elastic.co/elasticsearch/service).
+This project showcase how to use [Elastic APM](https://www.elastic.co/apm) with a microservice written in [Go](https://golang.org/) and instrumented using [OpenTelemetry](https://opentelemetry.io/).
 
-## Elastic APM running in your local machine
+## Run with the collector
 
-Just execute:
-
-```bash
-docker-compose -f docker-compose-local.yaml up -d
-```
-
-## Elastic APM running on Elasticsearch Service
-
-You will need to edit the file [collector-config-cloud.yaml](collector-config-cloud.yaml) and provide the following information:
+Using this model, the Go application sends the traces and metrics to a collector that forwards them to Elastic APM.
 
 ```bash
-exporters:
-  elastic:
-    apm_server_url: "<APM_SERVER_URL>"
-    secret_token: "<SECRET_TOKEN>"
+docker-compose -f run-with-collector.yaml up -d
 ```
 
-Then you can execute:
+## Run without the collector
+
+Using this model, the Go application sends the traces and metrics directly to Elastic APM.
 
 ```bash
-docker-compose -f docker-compose-cloud.yaml up -d
+docker-compose -f run-without-collector.yaml up -d
 ```
+
+## Accessing Elastic APM
+
+After executing the services you can reach the Elastic APM application in the following URL:
+
+```bash
+http://localhost:5601/app/apm
+```
+
+## Manually executing the Go application
 
 Once everything is running there will periodic requests being sent to the microservice so you don't need to issue any requests by yourself. However, if you want to do it anyway just execute:
 
