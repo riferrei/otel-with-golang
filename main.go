@@ -38,41 +38,46 @@ func main() {
 		otlpgrpc.WithEndpoint(endpoint),
 	)
 
-	exp, err := otlp.NewExporter(ctx, driver)
+	exporter, err := otlp.NewExporter(ctx, driver)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
 
-	res, err := resource.New(ctx,
+	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
 			semconv.ServiceVersionKey.String(serviceVersion),
 		),
 	)
 
-	bsp := sdktrace.NewBatchSpanProcessor(exp)
+	bsp := sdktrace.NewBatchSpanProcessor(exporter)
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithResource(res),
+		sdktrace.WithResource(res0urce),
 		sdktrace.WithSpanProcessor(bsp),
 	)
 
-	cont := controller.New(
+	pusher := controller.New(
 		processor.New(
 			simple.NewWithExactDistribution(),
-			exp,
+			exporter,
 		),
-		controller.WithExporter(exp),
+		controller.WithExporter(exporter),
 		controller.WithCollectPeriod(2*time.Second),
 	)
 
-	otel.SetTextMapPropagator(propagation.TraceContext{})
 	otel.SetTracerProvider(tracerProvider)
-	global.SetMeterProvider(cont.MeterProvider())
-	err = cont.Start(context.Background())
+	global.SetMeterProvider(pusher.MeterProvider())
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.Baggage{},
+		propagation.TraceContext{}),
+	)
+
+	err = pusher.Start(ctx)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to start the controller", err)
 	}
+	defer func() { _ = pusher.Stop(ctx) }()
 
 	router := mux.NewRouter()
 	router.Use(otelmux.Middleware(serviceName))
