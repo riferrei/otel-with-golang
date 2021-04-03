@@ -14,7 +14,7 @@ services:
     depends_on:
       - collector
     environment:
-      - ENDPOINT_ADDRESS=collector:55680
+      - EXPORTER_ENDPOINT=collector:55680
     healthcheck:
       interval: 5s
       retries: 10

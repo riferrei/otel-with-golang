@@ -32,17 +32,20 @@ func main() {
 
 	ctx := context.Background()
 
-	endpoint := os.Getenv("ENDPOINT_ADDRESS")
+	// Create the OTLP exporter that
+	// will receive the telemetry data
+	endpoint := os.Getenv("EXPORTER_ENDPOINT")
 	driver := otlpgrpc.NewDriver(
 		otlpgrpc.WithInsecure(),
 		otlpgrpc.WithEndpoint(endpoint),
 	)
-
 	exporter, err := otlp.NewExporter(ctx, driver)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
 
+	// Create a resource to decorate the
+	// application with proper metadata
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
@@ -50,6 +53,9 @@ func main() {
 		),
 	)
 
+	// Create a tracer provider based on
+	// the resource created above, a proper,
+	// sampler, and a batch span processor.
 	bsp := sdktrace.NewBatchSpanProcessor(exporter)
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
@@ -57,6 +63,7 @@ func main() {
 		sdktrace.WithSpanProcessor(bsp),
 	)
 
+	// Background pusher for metrics
 	pusher := controller.New(
 		processor.New(
 			simple.NewWithExactDistribution(),
@@ -65,7 +72,13 @@ func main() {
 		controller.WithExporter(exporter),
 		controller.WithCollectPeriod(2*time.Second),
 	)
+	err = pusher.Start(ctx)
+	if err != nil {
+		log.Fatalf("%s: %v", "failed to start the controller", err)
+	}
+	defer func() { _ = pusher.Stop(ctx) }()
 
+	// Register providers and propagator
 	otel.SetTracerProvider(tracerProvider)
 	global.SetMeterProvider(pusher.MeterProvider())
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
@@ -73,12 +86,7 @@ func main() {
 		propagation.TraceContext{}),
 	)
 
-	err = pusher.Start(ctx)
-	if err != nil {
-		log.Fatalf("%s: %v", "failed to start the controller", err)
-	}
-	defer func() { _ = pusher.Stop(ctx) }()
-
+	// Register the handler and start app
 	router := mux.NewRouter()
 	router.Use(otelmux.Middleware(serviceName))
 	router.HandleFunc("/hello", hello)

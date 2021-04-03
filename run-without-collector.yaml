@@ -14,7 +14,7 @@ services:
     depends_on:
       - apm-server
     environment:
-      - ENDPOINT_ADDRESS=apm-server:8200
+      - EXPORTER_ENDPOINT=apm-server:8200
     healthcheck:
       interval: 5s
       retries: 10
