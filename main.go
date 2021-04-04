@@ -54,8 +54,8 @@ func main() {
 	)
 
 	// Create a tracer provider based on
-	// the resource created above, a proper,
-	// sampler, and a batch span processor.
+	// the resource created above, a proper
+	// sampler, and a batch span processor
 	bsp := sdktrace.NewBatchSpanProcessor(exporter)
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
@@ -79,6 +79,9 @@ func main() {
 	defer func() { _ = pusher.Stop(ctx) }()
 
 	// Register providers and propagator
+	// so any third-party framework used
+	// in the application can understand
+	// what to do with traces and metrics
 	otel.SetTracerProvider(tracerProvider)
 	global.SetMeterProvider(pusher.MeterProvider())
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
