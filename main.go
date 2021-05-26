@@ -6,11 +6,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -26,13 +28,19 @@ import (
 )
 
 const (
-	serviceName    = "hello-app"
-	serviceVersion = "1.0"
+	metricPrefix     = "custom.metric."
+	numberOfExecName = metricPrefix + "number.of.exec"
+	numberOfExecDesc = "Count the number of executions."
+	heapMemoryName   = metricPrefix + "heap.memory"
+	heapMemoryDesc   = "Reports heap memory utilization."
+	serviceName      = "hello-app"
+	serviceVersion   = "1.0"
 )
 
 var (
-	tracer trace.Tracer
-	meter  metric.Meter
+	tracer             trace.Tracer
+	meter              metric.Meter
+	numberOfExecutions metric.BoundInt64Counter
 )
 
 func main() {
@@ -77,14 +85,14 @@ func main() {
 	)
 
 	// Creates a pusher for the metrics that runs
-	// in the background and push data every 1sec
+	// in the background and push data every 5sec
 	pusher := controller.New(
 		processor.New(
 			simple.NewWithExactDistribution(),
 			exporter,
 		),
 		controller.WithExporter(exporter),
-		controller.WithCollectPeriod(1*time.Second),
+		controller.WithCollectPeriod(5*time.Second),
 	)
 	err = pusher.Start(ctx)
 	if err != nil {
@@ -104,8 +112,37 @@ func main() {
 		),
 	)
 
+	// Instances to support custom traces/metrics
 	tracer = otel.Tracer(serviceName)
 	meter = global.Meter(serviceName)
+
+	// Creating a custom metric that is updated
+	// manually each time the API is executed
+	numberOfExecutions = metric.Must(meter).
+		NewInt64Counter(
+			numberOfExecName,
+			metric.WithDescription(numberOfExecDesc),
+		).Bind(
+		[]attribute.KeyValue{
+			semconv.ServiceNameKey.String(serviceName),
+			attribute.String(
+				numberOfExecName,
+				numberOfExecDesc)}...)
+
+	// Creating a custom metric that is updated
+	// automatically using an int64 observer
+	_ = metric.Must(meter).
+		NewInt64ValueObserver(
+			heapMemoryName,
+			func(_ context.Context, result metric.Int64ObserverResult) {
+				var mem runtime.MemStats
+				runtime.ReadMemStats(&mem)
+				result.Observe(int64(mem.HeapAlloc),
+					semconv.ServiceNameKey.String(serviceName),
+					attribute.String(heapMemoryName,
+						heapMemoryDesc))
+			},
+			metric.WithDescription(heapMemoryDesc))
 
 	// Register the API handler and starts the app
 	router := mux.NewRouter()
@@ -123,11 +160,15 @@ func hello(writer http.ResponseWriter, request *http.Request) {
 	response := buildResponse(writer)
 	buildResp.End()
 
+	// Creating a custom span just for fun...
 	_, mySpan := tracer.Start(ctx, "mySpan")
 	if response.isValid() {
 		log.Print("The response is valid")
 	}
 	mySpan.End()
+
+	// Updating the number of executions metric...
+	numberOfExecutions.Add(ctx, 1)
 
 }
 
