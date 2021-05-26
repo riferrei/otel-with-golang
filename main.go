@@ -28,13 +28,13 @@ import (
 )
 
 const (
+	serviceName      = "hello-app"
+	serviceVersion   = "1.0"
 	metricPrefix     = "custom.metric."
 	numberOfExecName = metricPrefix + "number.of.exec"
 	numberOfExecDesc = "Count the number of executions."
 	heapMemoryName   = metricPrefix + "heap.memory"
 	heapMemoryDesc   = "Reports heap memory utilization."
-	serviceName      = "hello-app"
-	serviceVersion   = "1.0"
 )
 
 var (
@@ -91,6 +91,7 @@ func main() {
 			simple.NewWithExactDistribution(),
 			exporter,
 		),
+		controller.WithResource(res0urce),
 		controller.WithExporter(exporter),
 		controller.WithCollectPeriod(5*time.Second),
 	)
@@ -113,8 +114,8 @@ func main() {
 	)
 
 	// Instances to support custom traces/metrics
-	tracer = otel.Tracer(serviceName)
-	meter = global.Meter(serviceName)
+	tracer = otel.Tracer("io.opentelemetry.traces.hello")
+	meter = global.Meter("io.opentelemetry.metrics.hello")
 
 	// Creating a custom metric that is updated
 	// manually each time the API is executed
@@ -124,7 +125,6 @@ func main() {
 			metric.WithDescription(numberOfExecDesc),
 		).Bind(
 		[]attribute.KeyValue{
-			semconv.ServiceNameKey.String(serviceName),
 			attribute.String(
 				numberOfExecName,
 				numberOfExecDesc)}...)
@@ -138,7 +138,6 @@ func main() {
 				var mem runtime.MemStats
 				runtime.ReadMemStats(&mem)
 				result.Observe(int64(mem.HeapAlloc),
-					semconv.ServiceNameKey.String(serviceName),
 					attribute.String(heapMemoryName,
 						heapMemoryDesc))
 			},
