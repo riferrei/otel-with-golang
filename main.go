@@ -106,6 +106,8 @@ func hello(writer http.ResponseWriter, request *http.Request) {
 
 	response := Response{"Hello World"}
 	bytes, _ := json.Marshal(response)
+
+	writer.WriteHeader(http.StatusOK)
 	writer.Header().Add("Content-Type",
 		"application/json")
 
