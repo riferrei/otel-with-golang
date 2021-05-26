@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
 	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
@@ -21,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/semconv"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -28,12 +30,17 @@ const (
 	serviceVersion = "1.0"
 )
 
+var (
+	tracer trace.Tracer
+	meter  metric.Meter
+)
+
 func main() {
 
 	ctx := context.Background()
 
-	// Create the OTLP exporter that
-	// will receive the telemetry data
+	// Create an gRPC-based OTLP exporter that
+	// will receive the created telemetry data
 	endpoint := os.Getenv("EXPORTER_ENDPOINT")
 	driver := otlpgrpc.NewDriver(
 		otlpgrpc.WithInsecure(),
@@ -44,18 +51,24 @@ func main() {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
 
-	// Create a resource to decorate the
-	// application with proper metadata
+	// Create a resource to decorate the app
+	// with common attributes from OTel spec
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
 			semconv.ServiceVersionKey.String(serviceVersion),
 		),
 	)
+	if err != nil {
+		log.Fatalf("%s: %v", "failed to create resource", err)
+	}
 
-	// Create a tracer provider based on
-	// the resource created above, a proper
-	// sampler, and a batch span processor
+	// Create a tracer provider that processes
+	// spans using a batch-span-processor. This
+	// tracer provider will create a sample for
+	// every trace created, which is great for
+	// demos but horrible for production –– as
+	// volume of data generated will be intense
 	bsp := sdktrace.NewBatchSpanProcessor(exporter)
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
@@ -63,14 +76,15 @@ func main() {
 		sdktrace.WithSpanProcessor(bsp),
 	)
 
-	// Background pusher for metrics
+	// Creates a pusher for the metrics that runs
+	// in the background and push data every 1sec
 	pusher := controller.New(
 		processor.New(
 			simple.NewWithExactDistribution(),
 			exporter,
 		),
 		controller.WithExporter(exporter),
-		controller.WithCollectPeriod(2*time.Second),
+		controller.WithCollectPeriod(1*time.Second),
 	)
 	err = pusher.Start(ctx)
 	if err != nil {
@@ -78,18 +92,22 @@ func main() {
 	}
 	defer func() { _ = pusher.Stop(ctx) }()
 
-	// Register providers and propagator
-	// so any third-party framework used
-	// in the application can understand
-	// what to do with traces and metrics
+	// Register the tracer provider and propagator
+	// so libraries and frameworks used in the app
+	// can reuse it to generate traces and metrics
 	otel.SetTracerProvider(tracerProvider)
 	global.SetMeterProvider(pusher.MeterProvider())
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.Baggage{},
-		propagation.TraceContext{}),
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.Baggage{},
+			propagation.TraceContext{},
+		),
 	)
 
-	// Register the handler and start app
+	tracer = otel.Tracer(serviceName)
+	meter = global.Meter(serviceName)
+
+	// Register the API handler and starts the app
 	router := mux.NewRouter()
 	router.Use(otelmux.Middleware(serviceName))
 	router.HandleFunc("/hello", hello)
@@ -97,20 +115,38 @@ func main() {
 
 }
 
-// Response struct
-type Response struct {
-	Message string `json:"message"`
-}
-
 func hello(writer http.ResponseWriter, request *http.Request) {
 
-	response := Response{"Hello World"}
-	bytes, _ := json.Marshal(response)
+	ctx := request.Context()
+
+	ctx, buildResp := tracer.Start(ctx, "buildResponse")
+	response := buildResponse(writer)
+	buildResp.End()
+
+	_, mySpan := tracer.Start(ctx, "mySpan")
+	if response.isValid() {
+		log.Print("The response is valid")
+	}
+	mySpan.End()
+
+}
+
+func buildResponse(writer http.ResponseWriter) Response {
 
 	writer.WriteHeader(http.StatusOK)
 	writer.Header().Add("Content-Type",
 		"application/json")
 
+	bytes, _ := json.Marshal("Hello World")
 	writer.Write(bytes)
+	return Response{}
 
+}
+
+// Response struct
+type Response struct {
+}
+
+func (r Response) isValid() bool {
+	return true
 }
