@@ -10,7 +10,7 @@ services:
     ports:
       - "8888:8888"
     networks:
-      - elastic
+      - otel-with-golang
     depends_on:
       - apm-server
     environment:
@@ -21,7 +21,7 @@ services:
       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:8888/hello
 
   apm-server:
-    image: docker.elastic.co/apm/apm-server:7.12.0
+    image: docker.elastic.co/apm/apm-server:7.12.1
     container_name: apm-server
     hostname: apm-server
     depends_on:
@@ -34,7 +34,7 @@ services:
     ports:
     - 8200:8200
     networks:
-    - elastic
+    - otel-with-golang
     command: >
        apm-server -e
          -E apm-server.rum.enabled=true
@@ -49,7 +49,7 @@ services:
       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:8200/
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.12.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.12.1
     container_name: elasticsearch
     environment:
     - bootstrap.memory_lock=true
@@ -62,18 +62,18 @@ services:
         hard: -1
         soft: -1
     volumes:
-    - esdata:/usr/share/elasticsearch/data
+    - otel-with-golang:/usr/share/elasticsearch/data
     ports:
     - 9200:9200
     networks:
-    - elastic
+    - otel-with-golang
     healthcheck:
       interval: 10s
       retries: 20
       test: curl -s http://localhost:9200/_cluster/health | grep -vq '"status":"red"'
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:7.12.0
+    image: docker.elastic.co/kibana/kibana:7.12.1
     container_name: kibana
     depends_on:
       elasticsearch:
@@ -84,16 +84,16 @@ services:
     ports:
     - 5601:5601
     networks:
-    - elastic
+    - otel-with-golang
     healthcheck:
       interval: 10s
       retries: 20
       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:5601/api/status
 
 volumes:
-  esdata:
+  otel-with-golang:
     driver: local
 
 networks:
-  elastic:
+  otel-with-golang:
     driver: bridge
