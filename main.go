@@ -177,14 +177,16 @@ func buildResponse(writer http.ResponseWriter) Response {
 	writer.Header().Add("Content-Type",
 		"application/json")
 
-	bytes, _ := json.Marshal("Hello World")
+	response := Response{"Hello World"}
+	bytes, _ := json.Marshal(response)
 	writer.Write(bytes)
-	return Response{}
+	return response
 
 }
 
 // Response struct
 type Response struct {
+	Message string `json:"Message"`
 }
 
 func (r Response) isValid() bool {
