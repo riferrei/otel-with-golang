@@ -1,13 +1,13 @@
 # OpenTelemetry in Go with Elastic APM
 
-This project showcase how to use [Elastic APM](https://www.elastic.co/apm) with a microservice written in [Go](https://golang.org/) and instrumented using [OpenTelemetry](https://opentelemetry.io/).
+This project showcase how to instrument a microservice written in [Go](https://golang.org/) using [OpenTelemetry](https://opentelemetry.io/), to produce telemetry data (traces and metrics) to [Elastic APM](https://www.elastic.co/apm).
 
 ## Run with the collector
 
 Using this model, the Go application sends the traces and metrics to a collector that forwards them to Elastic APM.
 
 ```bash
-docker-compose -f run-with-collector.yaml up -d
+docker compose -f run-with-collector.yaml up -d
 ```
 
 ## Run without the collector
@@ -15,7 +15,7 @@ docker-compose -f run-with-collector.yaml up -d
 Using this model, the Go application sends the traces and metrics directly to Elastic APM.
 
 ```bash
-docker-compose -f run-without-collector.yaml up -d
+docker compose -f run-without-collector.yaml up -d
 ```
 
 ## Accessing Elastic APM
