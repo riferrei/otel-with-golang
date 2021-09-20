@@ -1,4 +1,4 @@
-FROM golang:1.16.4
+FROM golang:1.17.0
 
 ADD . /usr/src/app
 WORKDIR /usr/src/app

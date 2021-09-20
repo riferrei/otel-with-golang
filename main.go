@@ -13,8 +13,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
@@ -23,8 +23,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/semconv"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -46,18 +47,7 @@ var (
 func main() {
 
 	ctx := context.Background()
-
-	// Create an gRPC-based OTLP exporter that
-	// will receive the created telemetry data
 	endpoint := os.Getenv("EXPORTER_ENDPOINT")
-	driver := otlpgrpc.NewDriver(
-		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint(endpoint),
-	)
-	exporter, err := otlp.NewExporter(ctx, driver)
-	if err != nil {
-		log.Fatalf("%s: %v", "failed to create exporter", err)
-	}
 
 	// Create a resource to decorate the app
 	// with common attributes from OTel spec
@@ -71,28 +61,42 @@ func main() {
 		log.Fatalf("%s: %v", "failed to create resource", err)
 	}
 
-	// Create a tracer provider that processes
-	// spans using a batch-span-processor. This
-	// tracer provider will create a sample for
-	// every trace created, which is great for
-	// demos but horrible for production –– as
-	// volume of data generated will be intense
-	bsp := sdktrace.NewBatchSpanProcessor(exporter)
+	// Create a gRPC trace exporter
+	traceExporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint(endpoint),
+		otlptracegrpc.WithDialOption(grpc.WithBlock()),
+	)
+	if err != nil {
+		log.Fatalf("%s: %v", "failed to create exporter", err)
+	}
+
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithResource(res0urce),
-		sdktrace.WithSpanProcessor(bsp),
+		sdktrace.WithSpanProcessor(
+			sdktrace.NewBatchSpanProcessor(traceExporter)),
 	)
+
+	// Create a gRPC metric exporter
+	metricExporter, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithInsecure(),
+		otlpmetricgrpc.WithEndpoint(endpoint),
+		otlpmetricgrpc.WithDialOption(grpc.WithBlock()),
+	)
+	if err != nil {
+		log.Fatalf("%s: %v", "failed to create exporter", err)
+	}
 
 	// Creates a pusher for the metrics that runs
 	// in the background and push data every 5sec
 	pusher := controller.New(
 		processor.New(
 			simple.NewWithExactDistribution(),
-			exporter,
+			metricExporter,
 		),
 		controller.WithResource(res0urce),
-		controller.WithExporter(exporter),
+		controller.WithExporter(metricExporter),
 		controller.WithCollectPeriod(5*time.Second),
 	)
 	err = pusher.Start(ctx)
@@ -132,7 +136,7 @@ func main() {
 	// Creating a custom metric that is updated
 	// automatically using an int64 observer
 	_ = metric.Must(meter).
-		NewInt64ValueObserver(
+		NewInt64CounterObserver(
 			heapMemoryName,
 			func(_ context.Context, result metric.Int64ObserverResult) {
 				var mem runtime.MemStats
