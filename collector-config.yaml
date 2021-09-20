@@ -3,11 +3,6 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:55680
-  hostmetrics:
-    collection_interval: 1m
-    scrapers:
-      load:
-      memory:
 
 processors:
   batch:
@@ -18,22 +13,18 @@ extensions:
   health_check:
 
 exporters:
-  elastic:
-    apm_server_url: "http://apm-server:8200"
+  otlp:
+    endpoint: "http://apm-server:8200"
+    insecure: true
 
 service:
   extensions: [health_check]
   pipelines:
     metrics:
-      receivers:
-        - otlp
-        - hostmetrics
-      exporters:
-        - elastic
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]
     traces:
-      receivers:
-        - otlp
-      processors:
-        - batch
-      exporters:
-        - elastic
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]
