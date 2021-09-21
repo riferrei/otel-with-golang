@@ -108,13 +108,14 @@ func main() {
 		log.Fatalf("%s: %v", "failed to start the controller", err)
 	}
 	defer func() { _ = pusher.Stop(ctx) }()
+
 	global.SetMeterProvider(pusher.MeterProvider())
 
 	// Support for programatic traces and metrics
 	tracer = otel.Tracer("io.opentelemetry.traces.hello")
 	meter = global.Meter("io.opentelemetry.metrics.hello")
 
-	// Metric that is updates manually
+	// Metric that is updated manually
 	numberOfExecutions = metric.Must(meter).
 		NewInt64Counter(
 			numberOfExecName,
