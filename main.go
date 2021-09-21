@@ -49,8 +49,7 @@ func main() {
 	ctx := context.Background()
 	endpoint := os.Getenv("EXPORTER_ENDPOINT")
 
-	// Create a resource to decorate the app
-	// with common attributes from OTel spec
+	// Resource for traces and metrics
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
@@ -61,7 +60,7 @@ func main() {
 		log.Fatalf("%s: %v", "failed to create resource", err)
 	}
 
-	// Create a gRPC trace exporter
+	// Setup the tracing
 	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(endpoint),
@@ -71,14 +70,21 @@ func main() {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
 
-	tracerProvider := sdktrace.NewTracerProvider(
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithResource(res0urce),
 		sdktrace.WithSpanProcessor(
 			sdktrace.NewBatchSpanProcessor(traceExporter)),
+	))
+
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.Baggage{},
+			propagation.TraceContext{},
+		),
 	)
 
-	// Create a gRPC metric exporter
+	// Setup the metrics
 	metricExporter, err := otlpmetricgrpc.New(ctx,
 		otlpmetricgrpc.WithInsecure(),
 		otlpmetricgrpc.WithEndpoint(endpoint),
@@ -88,8 +94,6 @@ func main() {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
 
-	// Creates a pusher for the metrics that runs
-	// in the background and push data every 5sec
 	pusher := controller.New(
 		processor.New(
 			simple.NewWithExactDistribution(),
@@ -104,25 +108,13 @@ func main() {
 		log.Fatalf("%s: %v", "failed to start the controller", err)
 	}
 	defer func() { _ = pusher.Stop(ctx) }()
-
-	// Register the tracer provider and propagator
-	// so libraries and frameworks used in the app
-	// can reuse it to generate traces and metrics
-	otel.SetTracerProvider(tracerProvider)
 	global.SetMeterProvider(pusher.MeterProvider())
-	otel.SetTextMapPropagator(
-		propagation.NewCompositeTextMapPropagator(
-			propagation.Baggage{},
-			propagation.TraceContext{},
-		),
-	)
 
-	// Instances to support custom traces/metrics
+	// Support for programatic traces and metrics
 	tracer = otel.Tracer("io.opentelemetry.traces.hello")
 	meter = global.Meter("io.opentelemetry.metrics.hello")
 
-	// Creating a custom metric that is updated
-	// manually each time the API is executed
+	// Metric that is updates manually
 	numberOfExecutions = metric.Must(meter).
 		NewInt64Counter(
 			numberOfExecName,
@@ -133,8 +125,7 @@ func main() {
 				numberOfExecName,
 				numberOfExecDesc)}...)
 
-	// Creating a custom metric that is updated
-	// automatically using an int64 observer
+	// Metric that updates automatically
 	_ = metric.Must(meter).
 		NewInt64CounterObserver(
 			heapMemoryName,
@@ -147,7 +138,7 @@ func main() {
 			},
 			metric.WithDescription(heapMemoryDesc))
 
-	// Register the API handler and starts the app
+	// Start the API with instrumentation
 	router := mux.NewRouter()
 	router.Use(otelmux.Middleware(serviceName))
 	router.HandleFunc("/hello", hello)
