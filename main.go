@@ -49,7 +49,7 @@ func main() {
 	ctx := context.Background()
 	endpoint := os.Getenv("EXPORTER_ENDPOINT")
 
-	// Resource for traces and metrics
+	// Resource to identify services
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
@@ -61,6 +61,7 @@ func main() {
 	}
 
 	// Setup the tracing
+
 	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(endpoint),
@@ -84,7 +85,10 @@ func main() {
 		),
 	)
 
+	tracer = otel.Tracer("io.opentelemetry.traces.hello")
+
 	// Setup the metrics
+
 	metricExporter, err := otlpmetricgrpc.New(ctx,
 		otlpmetricgrpc.WithInsecure(),
 		otlpmetricgrpc.WithEndpoint(endpoint),
@@ -110,9 +114,6 @@ func main() {
 	defer func() { _ = pusher.Stop(ctx) }()
 
 	global.SetMeterProvider(pusher.MeterProvider())
-
-	// Support for programatic traces and metrics
-	tracer = otel.Tracer("io.opentelemetry.traces.hello")
 	meter = global.Meter("io.opentelemetry.metrics.hello")
 
 	// Metric that is updated manually
@@ -139,7 +140,7 @@ func main() {
 			},
 			metric.WithDescription(heapMemoryDesc))
 
-	// Start the API with instrumentation
+	// Start the API
 	router := mux.NewRouter()
 	router.Use(otelmux.Middleware(serviceName))
 	router.HandleFunc("/hello", hello)
@@ -155,14 +156,14 @@ func hello(writer http.ResponseWriter, request *http.Request) {
 	response := buildResponse(writer)
 	buildResp.End()
 
-	// Creating a custom span just for fun...
+	// Create a custom span
 	_, mySpan := tracer.Start(ctx, "mySpan")
 	if response.isValid() {
 		log.Print("The response is valid")
 	}
 	mySpan.End()
 
-	// Updating the number of executions metric...
+	// Update the metric
 	numberOfExecutions.Add(ctx, 1)
 
 }
