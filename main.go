@@ -62,8 +62,6 @@ func main() {
 		return headersMap
 	}(headers)
 
-	println(headersMap["Authorization"])
-
 	// Resource to identify services
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
