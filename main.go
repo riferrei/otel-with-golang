@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -48,6 +49,20 @@ func main() {
 
 	ctx := context.Background()
 	endpoint := os.Getenv("EXPORTER_ENDPOINT")
+	headers := os.Getenv("EXPORTER_HEADERS")
+	headersMap := func(headers string) map[string]string {
+		headersMap := make(map[string]string)
+		if len(headers) > 0 {
+			headerItems := strings.Split(headers, ",")
+			for _, headerItem := range headerItems {
+				parts := strings.Split(headerItem, "=")
+				headersMap[parts[0]] = parts[1]
+			}
+		}
+		return headersMap
+	}(headers)
+
+	println(headersMap["Authorization"])
 
 	// Resource to identify services
 	res0urce, err := resource.New(ctx,
@@ -65,6 +80,7 @@ func main() {
 	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(endpoint),
+		otlptracegrpc.WithHeaders(headersMap),
 		otlptracegrpc.WithDialOption(grpc.WithBlock()),
 	)
 	if err != nil {
@@ -92,6 +108,7 @@ func main() {
 	metricExporter, err := otlpmetricgrpc.New(ctx,
 		otlpmetricgrpc.WithInsecure(),
 		otlpmetricgrpc.WithEndpoint(endpoint),
+		otlpmetricgrpc.WithHeaders(headersMap),
 		otlpmetricgrpc.WithDialOption(grpc.WithBlock()),
 	)
 	if err != nil {
