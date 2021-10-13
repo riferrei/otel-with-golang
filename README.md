@@ -26,7 +26,7 @@ After executing the services you can reach the Elastic APM application in the fo
 http://localhost:5601/app/apm
 ```
 
-## Manually executing the Go application
+## Invoking the microservice API
 
 Once everything is running there will periodic requests being sent to the microservice so you don't need to issue any requests by yourself. However, if you want to do it anyway just execute:
 
