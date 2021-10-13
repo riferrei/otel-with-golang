@@ -1,6 +1,6 @@
-# OpenTelemetry in Go with Elastic APM
+# OpenTelemetry in Go with Elastic Observability
 
-This project showcase how to instrument a microservice written in [Go](https://golang.org/) using [OpenTelemetry](https://opentelemetry.io/), to produce telemetry data (traces and metrics) to [Elastic APM](https://www.elastic.co/apm).
+This project showcase how to instrument a microservice written in [Go](https://golang.org/) using [OpenTelemetry](https://opentelemetry.io/), to produce telemetry data (traces and metrics) to [Elastic Observability](https://www.elastic.co/observability).
 
 ## Run with the collector
 
@@ -18,7 +18,7 @@ Using this model, the Go application sends the traces and metrics directly to El
 docker compose -f run-without-collector.yaml up -d
 ```
 
-## Accessing Elastic APM
+## Visualizing the traces
 
 After executing the services you can reach the Elastic APM application in the following URL:
 
