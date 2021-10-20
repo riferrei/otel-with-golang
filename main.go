@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -26,17 +27,19 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
-	serviceName      = "hello-app"
-	serviceVersion   = "1.0"
-	metricPrefix     = "custom.metric."
-	numberOfExecName = metricPrefix + "number.of.exec"
-	numberOfExecDesc = "Count the number of executions."
-	heapMemoryName   = metricPrefix + "heap.memory"
-	heapMemoryDesc   = "Reports heap memory utilization."
+	serviceName        = "hello-app"
+	serviceVersion     = "1.0"
+	metricPrefix       = "custom.metric."
+	numberOfExecName   = metricPrefix + "number.of.exec"
+	numberOfExecDesc   = "Count the number of executions."
+	heapMemoryName     = metricPrefix + "heap.memory"
+	heapMemoryDesc     = "Reports heap memory utilization."
+	elasticCloudSuffix = "elastic-cloud.com"
+	httpsPreffix       = "https://"
 )
 
 var (
@@ -63,6 +66,7 @@ func main() {
 	}(headers)
 
 	// Resource to identify services
+
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
@@ -75,12 +79,19 @@ func main() {
 
 	// Setup the tracing
 
-	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(endpoint),
-		otlptracegrpc.WithHeaders(headersMap),
-		otlptracegrpc.WithDialOption(grpc.WithBlock()),
-	)
+	traceOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithTimeout(5 * time.Second),
+	}
+	if strings.Contains(endpoint, elasticCloudSuffix) {
+		endpoint = strings.ReplaceAll(endpoint, httpsPreffix, "")
+		traceOpts = append(traceOpts, otlptracegrpc.WithHeaders(headersMap))
+		traceOpts = append(traceOpts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{})))
+	} else {
+		traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
+	}
+	traceOpts = append(traceOpts, otlptracegrpc.WithEndpoint(endpoint))
+
+	traceExporter, err := otlptracegrpc.New(ctx, traceOpts...)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
@@ -103,12 +114,19 @@ func main() {
 
 	// Setup the metrics
 
-	metricExporter, err := otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithInsecure(),
-		otlpmetricgrpc.WithEndpoint(endpoint),
-		otlpmetricgrpc.WithHeaders(headersMap),
-		otlpmetricgrpc.WithDialOption(grpc.WithBlock()),
-	)
+	metricOpts := []otlpmetricgrpc.Option{
+		otlpmetricgrpc.WithTimeout(5 * time.Second),
+	}
+	if strings.Contains(endpoint, elasticCloudSuffix) {
+		endpoint = strings.ReplaceAll(endpoint, httpsPreffix, "")
+		metricOpts = append(metricOpts, otlpmetricgrpc.WithHeaders(headersMap))
+		metricOpts = append(metricOpts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{})))
+	} else {
+		metricOpts = append(metricOpts, otlpmetricgrpc.WithInsecure())
+	}
+	metricOpts = append(metricOpts, otlpmetricgrpc.WithEndpoint(endpoint))
+
+	metricExporter, err := otlpmetricgrpc.New(ctx, metricOpts...)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
