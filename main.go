@@ -32,7 +32,7 @@ import (
 
 const (
 	serviceName        = "hello-app"
-	serviceVersion     = "1.0"
+	serviceVersion     = "v1.0.0"
 	metricPrefix       = "custom.metric."
 	numberOfExecName   = metricPrefix + "number.of.exec"
 	numberOfExecDesc   = "Count the number of executions."
@@ -71,6 +71,8 @@ func main() {
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
 			semconv.ServiceVersionKey.String(serviceVersion),
+			semconv.TelemetrySDKVersionKey.String("v1.0.1"),
+			semconv.TelemetrySDKLanguageGo,
 		),
 	)
 	if err != nil {
