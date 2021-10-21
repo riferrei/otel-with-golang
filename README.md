@@ -18,6 +18,10 @@ Using this model, the Go application sends the traces and metrics directly to El
 docker compose -f run-without-collector.yaml up -d
 ```
 
+## Run with Elastic Cloud
+
+The code is prepared to send data to Elastic Cloud as long you provide the correct endpoint and a bearer token for authentication. The [run-locally.sh](run-locally.sh) script has an example of how to provide those using environment variables.
+
 ## Visualizing the traces
 
 After executing the services you can reach the Elastic APM application in the following URL:
