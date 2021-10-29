@@ -2,6 +2,8 @@
 
 This project showcase how to instrument a microservice written in [Go](https://golang.org/) using [OpenTelemetry](https://opentelemetry.io/), to produce telemetry data (traces and metrics) to [Elastic Observability](https://www.elastic.co/observability).
 
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/riferrei/otel-with-golang)
+
 ## Run with the collector
 
 Using this model, the Go application sends the traces and metrics to a collector that forwards them to Elastic APM.

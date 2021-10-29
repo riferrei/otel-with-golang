@@ -73,10 +73,6 @@ services:
     - cluster.name=docker-cluster
     - discovery.type=single-node
     - ES_JAVA_OPTS=-Xms1g -Xmx1g
-    ulimits:
-      memlock:
-        hard: -1
-        soft: -1
     ports:
     - 9200:9200
     networks:
