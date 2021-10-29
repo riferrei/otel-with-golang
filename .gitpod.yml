@@ -13,8 +13,10 @@ github:
 
 # List the start up tasks. Learn more https://www.gitpod.io/docs/config-start-tasks/
 tasks:
-  - init: docker-compose -f run-without-collector.yaml --build pull
+
+  - init: docker-compose -f run-without-collector.yaml build && docker-compose -f run-without-collector.yaml pull
     command: docker-compose -f run-without-collector.yaml up -d
+
 
 # List the ports to expose. Learn more https://www.gitpod.io/docs/config-ports/
 ports:
