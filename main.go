@@ -38,7 +38,7 @@ const (
 	numberOfExecDesc   = "Count the number of executions."
 	heapMemoryName     = metricPrefix + "heap.memory"
 	heapMemoryDesc     = "Reports heap memory utilization."
-	elasticCloudSuffix = "elastic-cloud.com"
+	elasticCloudSuffix = "cloud.es.io"
 	httpsPreffix       = "https://"
 )
 
