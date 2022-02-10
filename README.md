@@ -33,7 +33,7 @@ User: admin
 Pass: changeme
 ```
 
-## Manually executing the Go application
+## Invoking the microservice API
 
 Once everything is running, periodic requests will be sent to the microservice, so you don't need to issue any requests by yourself. However, if you want to do it anyway, just execute:
 
