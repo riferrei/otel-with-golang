@@ -20,7 +20,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
-	go.opentelemetry.io/contrib v0.23.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric v0.23.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.0.0 // indirect
 	go.opentelemetry.io/otel/internal/metric v0.23.0 // indirect
