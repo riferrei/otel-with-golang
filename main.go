@@ -45,7 +45,7 @@ const (
 var (
 	tracer             trace.Tracer
 	meter              metric.Meter
-	numberOfExecutions metric.BoundInt64Counter
+	numberOfExecutions metric.Int64Counter
 )
 
 func main() {
@@ -71,7 +71,7 @@ func main() {
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
 			semconv.ServiceVersionKey.String(serviceVersion),
-			semconv.TelemetrySDKVersionKey.String("v1.0.1"),
+			semconv.TelemetrySDKVersionKey.String("v1.4.1"),
 			semconv.TelemetrySDKLanguageGo,
 		),
 	)
@@ -134,21 +134,22 @@ func main() {
 	}
 
 	pusher := controller.New(
-		processor.New(
-			simple.NewWithExactDistribution(),
+		processor.NewFactory(
+			simple.NewWithHistogramDistribution(),
 			metricExporter,
 		),
 		controller.WithResource(res0urce),
 		controller.WithExporter(metricExporter),
 		controller.WithCollectPeriod(5*time.Second),
 	)
+
 	err = pusher.Start(ctx)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to start the controller", err)
 	}
 	defer func() { _ = pusher.Stop(ctx) }()
 
-	global.SetMeterProvider(pusher.MeterProvider())
+	global.SetMeterProvider(pusher)
 	meter = global.Meter("io.opentelemetry.metrics.hello")
 
 	// Metric that is updated manually
@@ -156,11 +157,7 @@ func main() {
 		NewInt64Counter(
 			numberOfExecName,
 			metric.WithDescription(numberOfExecDesc),
-		).Bind(
-		[]attribute.KeyValue{
-			attribute.String(
-				numberOfExecName,
-				numberOfExecDesc)}...)
+		)
 
 	// Metric that updates automatically
 	_ = metric.Must(meter).
@@ -199,7 +196,11 @@ func hello(writer http.ResponseWriter, request *http.Request) {
 	mySpan.End()
 
 	// Update the metric
-	numberOfExecutions.Add(ctx, 1)
+	numberOfExecutions.Add(ctx, 1,
+		[]attribute.KeyValue{
+			attribute.String(
+				numberOfExecName,
+				numberOfExecDesc)}...)
 
 }
 
