@@ -51,6 +51,8 @@ var (
 func main() {
 
 	ctx := context.Background()
+
+	// OpenTelemetry agent connectivity data
 	endpoint := os.Getenv("EXPORTER_ENDPOINT")
 	headers := os.Getenv("EXPORTER_HEADERS")
 	headersMap := func(headers string) map[string]string {
@@ -65,8 +67,7 @@ func main() {
 		return headersMap
 	}(headers)
 
-	// Resource to identify services
-
+	// Resource to name traces/metrics
 	res0urce, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
@@ -79,7 +80,70 @@ func main() {
 		log.Fatalf("%s: %v", "failed to create resource", err)
 	}
 
-	// Setup the tracing
+	// Initialize the tracer provider
+	initTracer(ctx, endpoint, headersMap, res0urce)
+
+	// Initialize the meter provider
+	initMeter(ctx, endpoint, headersMap, res0urce)
+
+	// Create the metrics
+	createMetrics()
+
+	// Start the microservice
+	router := mux.NewRouter()
+	router.Use(otelmux.Middleware(serviceName))
+	router.HandleFunc("/hello", hello)
+	http.ListenAndServe(":8888", router)
+
+}
+
+func hello(writer http.ResponseWriter, request *http.Request) {
+
+	ctx := request.Context()
+
+	ctx, buildResp := tracer.Start(ctx, "buildResponse")
+	response := buildResponse(writer)
+	buildResp.End()
+
+	// Create a custom span
+	_, mySpan := tracer.Start(ctx, "mySpan")
+	if response.isValid() {
+		log.Print("The response is valid")
+	}
+	mySpan.End()
+
+	// Update the metric
+	numberOfExecutions.Add(ctx, 1,
+		[]attribute.KeyValue{
+			attribute.String(
+				numberOfExecName,
+				numberOfExecDesc)}...)
+
+}
+
+func buildResponse(writer http.ResponseWriter) response {
+
+	writer.WriteHeader(http.StatusOK)
+	writer.Header().Add("Content-Type",
+		"application/json")
+
+	response := response{"Hello World"}
+	bytes, _ := json.Marshal(response)
+	writer.Write(bytes)
+	return response
+
+}
+
+type response struct {
+	Message string `json:"Message"`
+}
+
+func (r response) isValid() bool {
+	return true
+}
+
+func initTracer(ctx context.Context, endpoint string,
+	headersMap map[string]string, res0urce *resource.Resource) {
 
 	traceOpts := []otlptracegrpc.Option{
 		otlptracegrpc.WithTimeout(5 * time.Second),
@@ -114,7 +178,10 @@ func main() {
 
 	tracer = otel.Tracer("io.opentelemetry.traces.hello")
 
-	// Setup the metrics
+}
+
+func initMeter(ctx context.Context, endpoint string,
+	headersMap map[string]string, res0urce *resource.Resource) {
 
 	metricOpts := []otlpmetricgrpc.Option{
 		otlpmetricgrpc.WithTimeout(5 * time.Second),
@@ -145,21 +212,24 @@ func main() {
 
 	err = pusher.Start(ctx)
 	if err != nil {
-		log.Fatalf("%s: %v", "failed to start the controller", err)
+		log.Fatalf("%s: %v", "failed to start the pusher", err)
 	}
-	defer func() { _ = pusher.Stop(ctx) }()
 
 	global.SetMeterProvider(pusher)
 	meter = global.Meter("io.opentelemetry.metrics.hello")
 
-	// Metric that is updated manually
+}
+
+func createMetrics() {
+
+	// Metric to be updated manually
 	numberOfExecutions = metric.Must(meter).
 		NewInt64Counter(
 			numberOfExecName,
 			metric.WithDescription(numberOfExecDesc),
 		)
 
-	// Metric that updates automatically
+	// Metric to be updated automatically
 	_ = metric.Must(meter).
 		NewInt64CounterObserver(
 			heapMemoryName,
@@ -172,56 +242,4 @@ func main() {
 			},
 			metric.WithDescription(heapMemoryDesc))
 
-	// Start the API
-	router := mux.NewRouter()
-	router.Use(otelmux.Middleware(serviceName))
-	router.HandleFunc("/hello", hello)
-	http.ListenAndServe(":8888", router)
-
-}
-
-func hello(writer http.ResponseWriter, request *http.Request) {
-
-	ctx := request.Context()
-
-	ctx, buildResp := tracer.Start(ctx, "buildResponse")
-	response := buildResponse(writer)
-	buildResp.End()
-
-	// Create a custom span
-	_, mySpan := tracer.Start(ctx, "mySpan")
-	if response.isValid() {
-		log.Print("The response is valid")
-	}
-	mySpan.End()
-
-	// Update the metric
-	numberOfExecutions.Add(ctx, 1,
-		[]attribute.KeyValue{
-			attribute.String(
-				numberOfExecName,
-				numberOfExecDesc)}...)
-
-}
-
-func buildResponse(writer http.ResponseWriter) Response {
-
-	writer.WriteHeader(http.StatusOK)
-	writer.Header().Add("Content-Type",
-		"application/json")
-
-	response := Response{"Hello World"}
-	bytes, _ := json.Marshal(response)
-	writer.Write(bytes)
-	return response
-
-}
-
-// Response struct
-type Response struct {
-	Message string `json:"Message"`
-}
-
-func (r Response) isValid() bool {
-	return true
 }
