@@ -14,7 +14,7 @@ extensions:
 
 exporters:
   otlp:
-    endpoint: "http://apm-server:8200"
+    endpoint: "http://fleet-server:8200"
     insecure: true
 
 service:
