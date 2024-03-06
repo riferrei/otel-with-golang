@@ -123,9 +123,8 @@ func hello(writer http.ResponseWriter, request *http.Request) {
 
 func buildResponse(writer http.ResponseWriter) response {
 
+	writer.Header().Add("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
-	writer.Header().Add("Content-Type",
-		"application/json")
 
 	response := response{"Hello World"}
 	bytes, _ := json.Marshal(response)

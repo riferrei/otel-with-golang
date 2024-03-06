@@ -41,6 +41,16 @@ Once everything is running, periodic requests will be sent to the microservice, 
 curl -X GET http://localhost:8888/hello
 ```
 
+# SELinux Permissions
+
+If your host is running SELinux, the containers may be unable to access files that
+are mounted from volumes, such as `/usr/share/elasticsearch/config/roles.yml`.
+You can fix this by relabeling the files and directories that are to be mounted:
+
+```bash
+    chcon -R -t container_file_t collector-config.yaml environment fleet-server
+```
+
 # License
 
 This project is licensed under the [Apache 2.0 License](./LICENSE).
