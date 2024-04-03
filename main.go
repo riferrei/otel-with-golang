@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime"
@@ -18,14 +19,11 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
-	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
-	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
-	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/credentials"
 )
@@ -72,13 +70,16 @@ func main() {
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
 			semconv.ServiceVersionKey.String(serviceVersion),
-			semconv.TelemetrySDKVersionKey.String("v1.4.1"),
+			semconv.TelemetrySDKVersionKey.String(otel.Version()),
 			semconv.TelemetrySDKLanguageGo,
 		),
 	)
 	if err != nil {
 		log.Fatalf("%s: %v", "failed to create resource", err)
 	}
+
+	// Initialize the default logger
+	initLogger()
 
 	// Initialize the tracer provider
 	initTracer(ctx, endpoint, headersMap, res0urce)
@@ -108,17 +109,14 @@ func hello(writer http.ResponseWriter, request *http.Request) {
 	// Create a custom span
 	_, mySpan := tracer.Start(ctx, "mySpan")
 	if response.isValid() {
-		log.Print("The response is valid")
+		// Log records with context will include the trace id.
+		slog.InfoContext(ctx, "The response is valid")
 	}
 	mySpan.End()
 
 	// Update the metric
 	numberOfExecutions.Add(ctx, 1,
-		[]attribute.KeyValue{
-			attribute.String(
-				numberOfExecName,
-				numberOfExecDesc)}...)
-
+		metric.WithAttributes(attribute.String(numberOfExecName, numberOfExecDesc)))
 }
 
 func buildResponse(writer http.ResponseWriter) response {
@@ -199,46 +197,65 @@ func initMeter(ctx context.Context, endpoint string,
 		log.Fatalf("%s: %v", "failed to create exporter", err)
 	}
 
-	pusher := controller.New(
-		processor.NewFactory(
-			simple.NewWithHistogramDistribution(),
-			metricExporter,
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithResource(res0urce),
+		sdkmetric.WithReader(
+			sdkmetric.NewPeriodicReader(
+				metricExporter,
+				sdkmetric.WithInterval(5*time.Second), // Default is 1m
+			),
 		),
-		controller.WithResource(res0urce),
-		controller.WithExporter(metricExporter),
-		controller.WithCollectPeriod(5*time.Second),
 	)
+	otel.SetMeterProvider(meterProvider)
 
-	err = pusher.Start(ctx)
-	if err != nil {
-		log.Fatalf("%s: %v", "failed to start the pusher", err)
-	}
-
-	global.SetMeterProvider(pusher)
-	meter = global.Meter("io.opentelemetry.metrics.hello")
-
+	meter = meterProvider.Meter("io.opentelemetry.metrics.hello")
 }
 
 func createMetrics() {
+	var err error
 
 	// Metric to be updated manually
-	numberOfExecutions = metric.Must(meter).
-		NewInt64Counter(
-			numberOfExecName,
-			metric.WithDescription(numberOfExecDesc),
-		)
+	numberOfExecutions, err = meter.Int64Counter(
+		numberOfExecName,
+		metric.WithDescription(numberOfExecDesc),
+	)
+	if err != nil {
+		log.Fatalf("%s %q: %v", "failed to create metric", numberOfExecName, err)
+	}
 
 	// Metric to be updated automatically
-	_ = metric.Must(meter).
-		NewInt64CounterObserver(
-			heapMemoryName,
-			func(_ context.Context, result metric.Int64ObserverResult) {
+	_, err = meter.Int64ObservableCounter(
+		heapMemoryName,
+		metric.WithDescription(heapMemoryDesc),
+		metric.WithInt64Callback(
+			func(_ context.Context, obs metric.Int64Observer) error {
 				var mem runtime.MemStats
 				runtime.ReadMemStats(&mem)
-				result.Observe(int64(mem.HeapAlloc),
-					attribute.String(heapMemoryName,
-						heapMemoryDesc))
+				obs.Observe(int64(mem.HeapAlloc),
+					metric.WithAttributes(attribute.String(heapMemoryName, heapMemoryDesc)))
+				return nil
 			},
-			metric.WithDescription(heapMemoryDesc))
+		),
+	)
+	if err != nil {
+		log.Fatalf("%s %q: %v", "failed to create metric", heapMemoryName, err)
+	}
+}
 
+// Embed slog.Handler so that we can wrap the Handle method
+type slogHandler struct {
+	slog.Handler
+}
+
+// Handle adds trace.id to the Record before calling the underlying handler.
+func (h slogHandler) Handle(ctx context.Context, r slog.Record) error {
+	if spanContext := trace.SpanContextFromContext(ctx); spanContext.IsValid() {
+		r.AddAttrs(slog.String("trace.id", spanContext.TraceID().String()))
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+func initLogger() {
+	logHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(&slogHandler{logHandler}))
 }
