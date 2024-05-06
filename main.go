@@ -21,7 +21,7 @@ func buildResponse(writer http.ResponseWriter) {
 	response := &struct {
 		Message string `json:"Message"`
 	}{
-		Message: "Hello World!",
+		Message: "Hello World",
 	}
 	bytes, err := json.Marshal(response)
 	if err != nil {
